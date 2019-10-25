@@ -1,0 +1,143 @@
+DF <- read.csv("2007-2016-Homelessnewss-USA.csv")
+
+#Keeping only Year 2016 and getting rid of comas
+
+DF1 <- filter(DF,Year=="1/1/2016")
+DF1$Count <- gsub(",","",DF1$Count)
+
+#Cleaning Year
+
+DF1$Year <- gsub("1/1/2016","2016",DF1$Year)
+
+#Adding number of homeless people by State
+
+vec <- unique(DF1$State)
+
+# Keeping only name of State and Number of Homeless people
+
+DF2 <- select(DF1,State,Count)
+
+# Sorting Each States by total of Homeless people.
+
+x <- vector(mode="integer",length=length(vec))
+y <- vector(mode="integer",length=length(vec))
+a=1
+b=0
+c=0
+d=0
+
+
+for (i in vec) {
+  
+  b = b + 1
+    
+  while (DF2$State[a] == vec[b]) {
+      
+    c = c + as.integer(as.character(DF2$Count[d+1]))
+    x[b] = c
+    y[b] = a
+    a = a + 1
+    d = d + 1
+    
+    if ( a > length(DF2$State)){
+      break }
+    
+    }
+
+  c = 0
+  
+}
+
+#Creating a new DF with State and Total homeless people
+
+DF4 <- data.frame(as.factor(vec),x)
+
+#Renaming the columns
+
+colnames(DF4) <- c("State","Number Of Homeless People")
+
+#Rename and Reorder States
+
+DF4$State <- c("Alaska","Alabama","Arkansas","Arizona","California","Colorado","Connecticut","District of Columbia","Delaware","Florida","Georgia",
+               "Guam","Hawaii","Iowa","Idaho","Illinois","Indiana","Kansas","Kentucky","Louisiana","Massachusetts","Maryland","Maine","Michigan","Minnesota",
+               "Missouri","Mississippi","Montana","North Carolina","North Dakota","Nebraska","New Hampshire","New Jersey","New Mexico","Nevada","New York",
+               "Ohio","Oklahoma","Oregon","Pennsylvania","Puerto Rico","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Virginia",
+               "Virgin Islands","Vermont","Washington","Wisconsin","West Virginia","Wyoming")
+
+DF4 <- arrange(DF4,State)
+
+#Importing the number of people per State
+
+DF5 <- read.csv("Population-by-state.csv",skip=1)
+
+#Keeping, Renaming and rearranging Alphabetically States and Population Columns
+
+DF6 <- select(DF5,Geography,Population.Estimate..as.of.July.1....2016)
+
+colnames(DF6) <- c("State","Total Population")
+
+DF6 <- arrange(DF6,State)
+
+#Renaming Homeless Population DF
+
+Pop_Homeless <- DF4
+
+#Creating Guam and Virgin Islands Population information
+
+Guam <- data.frame("Guam",162896)
+colnames(Guam) <- c("State","Total Population")
+
+Virgin.islands<- data.frame(State="Virgin Islands","Total Population"=107510)
+colnames(Virgin.islands) <- c("State","Total Population")
+
+#Incorporating new States in DF
+
+Pop_State <- rbind(DF6,Guam,Virgin.islands)
+Pop_State <- arrange(Pop_State,as.character(State))
+
+#Converting to pourcentage of homeless and renaming columns
+
+Pop_Homeless <- mutate(Pop_Homeless,Pourcentage = Pop_Homeless$`Number Of Homeless People`/Pop_State$`Total Population`*100)
+Pop_Homeless <- Pop_Homeless[,-2]
+colnames(Pop_Homeless) <- c("State","Pourcentage of Homeless Population")
+
+#Keeping only 2 digits after coma
+Pop_Homeless$`Pourcentage of Homeless Population` <- format(round(Pop_Homeless$`Pourcentage of Homeless Population`,2))
+
+#Exporting File
+write.csv(Pop_Homeless,"ouaip.csv")
+
+#Importing Data for US and States maps
+USA <- map_data("usa")
+states <- map_data("state")
+
+#Cleaning Data & Getting rid of District of Columbia
+colnames(Pop_Homeless) <- c("region","Pourcentage")
+Pop_Homeless$region <- tolower(Pop_Homeless$region)
+Pop_Homeless_cleaned <- Pop_Homeless[-9,]
+
+States_by_Homeless <- inner_join(states,Pop_Homeless_cleaned,by="region")
+States_by_Homeless$Pourcentage <- as.numeric(States_by_Homeless$Pourcentage)
+
+
+#Creating Theme wiht no legends
+
+ditch_the_axes <- theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank()
+)
+
+#Final Plot of the Heatmap
+
+Final_map <-  ggplot(data=States_by_Homeless) + 
+        geom_polygon(aes(x = long, y = lat, group = group,fill=Pourcentage),colour="black") +
+        coord_fixed(1.3) + ditch_the_axes +  scale_fill_gradient(low="yellow",high="red") + labs(fill="Pourcentage of Homeless Population Per State") +
+        theme(legend.position="bottom")
+        
+Final_map
+
+
